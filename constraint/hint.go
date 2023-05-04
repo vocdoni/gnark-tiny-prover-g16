@@ -1,0 +1,45 @@
+package cs
+
+import csolver "github.com/vocdoni/gnark-tiny-prover-g16/hintsolver"
+
+// HintMapping mark a list of output variables to be computed using provided hint and inputs.
+type HintMapping struct {
+	HintID      csolver.HintID     // Hint function id
+	Inputs      []LinearExpression // Terms to inject in the hint function
+	OutputRange struct {           // IDs of wires the hint outputs map to
+		Start, End uint32
+	}
+}
+
+// WireIterator implements constraint.Iterable
+// returns all the wires referenced by the hint.
+func (h *HintMapping) WireIterator() func() int {
+	curr := 0
+	n := 0
+	for i := 0; i < len(h.Inputs); i++ {
+		n += len(h.Inputs[i])
+	}
+	inputs := getBuffer(n)
+	for i := 0; i < len(h.Inputs); i++ {
+		for j := 0; j < len(h.Inputs[i]); j++ {
+			term := h.Inputs[i][j]
+			if term.IsConstant() {
+				continue
+			}
+			inputs = append(inputs, term.VID)
+		}
+	}
+	lenOutputs := int(h.OutputRange.End - h.OutputRange.Start)
+
+	return func() int {
+		if curr < lenOutputs {
+			curr++
+			return int(h.OutputRange.Start) + curr - 1
+		}
+		if curr < lenOutputs+len(inputs) {
+			curr++
+			return int(inputs[curr-1-lenOutputs])
+		}
+		return -1
+	}
+}
